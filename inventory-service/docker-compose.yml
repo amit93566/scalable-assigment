@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  # ------------------------------------
+  # 1. MySQL Database Service
+  # ------------------------------------
+  inventory-db:
+    image: mysql:8.0
+    container_name: inventory-db
+    environment:
+      # Password must match the one in your .env
+      MYSQL_ROOT_PASSWORD: ipas
+      MYSQL_DATABASE: inventory_db             
+    volumes:
+      - inventory_db_data:/var/lib/mysql
+    ports:
+      # Host Port 3308 -> Container Port 3306
+      - "3308:3306"
+    healthcheck:
+      # CRITICAL FIX 1: Update healthcheck password to match the one set above
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "root", "-pipas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - inventory-net
+
+  # ------------------------------------
+  # 2. Inventory Service
+  # ------------------------------------
+  inventory-service:
+    build: .
+    container_name: inventory-service
+    environment:
+      # Database connection configuration
+      DB_HOST: inventory-db
+      DB_USER: root
+      DB_PASSWORD: ipas
+      DB_NAME: inventory_db
+      DB_PORT: 3306
+      # Service port
+      PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      inventory-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - inventory-net
+
+volumes:
+  inventory_db_data:
+
+networks:
+  inventory-net:
+    driver: bridge
