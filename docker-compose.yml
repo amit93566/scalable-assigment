@@ -1,0 +1,220 @@
+
+services:
+  # ============================================
+  # DATABASES
+  # ============================================
+  
+  # Order Service Database
+  order-db:
+    image: mysql:8.0
+    container_name: order-db
+    environment:
+      MYSQL_ROOT_PASSWORD: chima1234
+      MYSQL_DATABASE: order_db
+    volumes:
+      - order_db_data:/var/lib/mysql
+    ports:
+      - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pchima1234"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-net
+
+  # Catalog Service Database
+  catalog-db:
+    image: mysql:8.0
+    container_name: catalog-db
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: catalog_db
+    volumes:
+      - catalog_db_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-net
+
+  # Inventory Service Database
+  inventory-db:
+    image: mysql:8.0
+    container_name: inventory-db
+    environment:
+      MYSQL_ROOT_PASSWORD: ipas
+      MYSQL_DATABASE: inventory_db
+    volumes:
+      - inventory_db_data:/var/lib/mysql
+    ports:
+      - "3308:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-pipas"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - microservices-net
+
+  # Payment Service Database
+  payments-db:
+    image: postgres:15
+    container_name: payments-db
+    restart: always
+    environment:
+      POSTGRES_DB: paymentsdb
+      POSTGRES_USER: yash
+      POSTGRES_PASSWORD: yash123
+    ports:
+      - "5436:5432"
+    volumes:
+      - payments_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yash -d paymentsdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - microservices-net
+
+  # ============================================
+  # MICROSERVICES
+  # ============================================
+
+  # Catalog Service (Java Spring Boot)
+  catalog-service:
+    build:
+      context: ./catalog-service-master
+      dockerfile: Dockerfile
+    container_name: catalog-service
+    environment:
+      DB_HOST: catalog-db
+      DB_USER: root
+      DB_PASSWORD: root123
+      SPRING_PROFILES_ACTIVE: docker
+    ports:
+      - "8081:8081"
+    depends_on:
+      catalog-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8081/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    networks:
+      - microservices-net
+
+  # Inventory Service (Node.js)
+  inventory-service:
+    build:
+      context: ./inventory-service
+      dockerfile: Dockerfile
+    container_name: inventory-service
+    environment:
+      DB_HOST: inventory-db
+      DB_USER: root
+      DB_PASSWORD: ipas
+      DB_NAME: inventory_db
+      DB_PORT: 3306
+      PORT: 8082
+    ports:
+      - "8082:8082"
+    depends_on:
+      inventory-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - microservices-net
+
+  # Payment Service (Java Spring Boot)
+  payment-service:
+    build:
+      context: ./payments-service
+      dockerfile: Dockerfile
+    container_name: payment-service
+    depends_on:
+      payments-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://payments-db:5432/paymentsdb
+      SPRING_DATASOURCE_USERNAME: yash
+      SPRING_DATASOURCE_PASSWORD: yash123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SERVER_PORT: 8083
+    ports:
+      - "8083:8083"
+    restart: on-failure
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8083/actuator/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 90s
+    networks:
+      - microservices-net
+
+  # Order Service (Node.js) - Orchestrator
+  order-service:
+    build:
+      context: ./ss_order_service-master
+      dockerfile: Dockerfile
+      args:
+        - DATABASE_URL=mysql://root:chima1234@order-db:3306/order_db
+    container_name: order-service
+    environment:
+      # Database connection
+      DATABASE_URL: mysql://root:chima1234@order-db:3306/order_db
+      # Service port
+      PORT: 8080
+      # External service URLs - use Docker service names for inter-service communication
+      CATALOG_SERVICE_URL: http://catalog-service:8081/v1
+      INVENTORY_SERVICE_URL: http://inventory-service:8082
+      PAYMENT_SERVICE_URL: http://payment-service:8083
+    ports:
+      - "8080:8080"
+    depends_on:
+      order-db:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      inventory-service:
+        condition: service_healthy
+      payment-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - microservices-net
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  order_db_data:
+  catalog_db_data:
+  inventory_db_data:
+  payments_data:
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  microservices-net:
+    driver: bridge
+
