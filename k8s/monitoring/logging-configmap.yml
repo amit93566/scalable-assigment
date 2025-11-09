@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: logging-config
+  namespace: eci
+data:
+  logback-spring.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+      <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+      
+      <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+          <providers>
+            <timestamp/>
+            <version/>
+            <logLevel/>
+            <message/>
+            <mdc/>
+            <stackTrace/>
+            <pattern>
+              <pattern>
+                {
+                  "service": "${spring.application.name:-unknown}",
+                  "traceId": "%mdc{traceId:-}",
+                  "spanId": "%mdc{spanId:-}"
+                }
+              </pattern>
+            </pattern>
+          </providers>
+        </encoder>
+      </appender>
+      
+      <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+          <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+      </appender>
+      
+      <root level="INFO">
+        <appender-ref ref="JSON"/>
+      </root>
+    </configuration>
+  
+  logging.properties: |
+    # Structured JSON logging configuration
+    # PII masking should be implemented in application code
+    # Example patterns for masking:
+    # - Email: maskEmail(email) -> "user@***.***"
+    # - Phone: maskPhone(phone) -> "***-***-****"
+    # - Address: maskAddress(address) -> "*** Street, ***"
+    
+    # Log format: JSON
+    logging.format=json
+    
+    # Log level
+    logging.level.root=INFO
+    logging.level.com.eci=DEBUG
+    
+    # Mask PII in logs
+    logging.mask.pii.enabled=true
+

@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-service
+  namespace: eci
+  labels:
+    app: inventory-service
+    monitoring: enabled
+spec:
+  selector:
+    app: inventory-service
+  ports:
+    - port: 8081
+      targetPort: 8081
+      nodePort: 30081
+      name: http
+  type: NodePort
+

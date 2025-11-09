@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-db
+  namespace: eci
+  labels:
+    app: payments-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payments-db
+  template:
+    metadata:
+      labels:
+        app: payments-db
+    spec:
+      containers:
+        - name: payments-db
+          image: postgres:16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: yash
+            - name: POSTGRES_PASSWORD
+              value: yash123
+            - name: POSTGRES_DB
+              value: paymentsdb
+          volumeMounts:
+            - name: payments-db-storage
+              mountPath: /var/lib/postgresql/data
+            - name: payments-db-init
+              mountPath: /docker-entrypoint-initdb.d/init_payments.sql
+              subPath: init_payments.sql
+            - name: payments-csv
+              mountPath: /docker-entrypoint-initdb.d/eci_payments.csv
+              subPath: eci_payments.csv
+      volumes:
+        - name: payments-db-storage
+          persistentVolumeClaim:
+            claimName: payments-db-pvc
+        - name: payments-db-init
+          configMap:
+            name: payments-db-init
+        - name: payments-csv
+          configMap:
+            name: payments-csv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: payments-db-pvc
+  namespace: eci
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-db
+  namespace: eci
+spec:
+  type: ClusterIP
+  selector:
+    app: payments-db
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+

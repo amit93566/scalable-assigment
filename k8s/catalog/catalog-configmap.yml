@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-config
+  namespace: eci
+data:
+  SPRING_JPA_HIBERNATE_DDL_AUTO: update
+  SERVER_PORT: "8080"
+  POSTGRES_DB: catalogdb
+

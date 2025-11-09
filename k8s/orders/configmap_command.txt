@@ -1,0 +1,16 @@
+Create config-map
+==================
+
+kubectl create configmap orders-db-init \
+  --from-file=/home/yash/ECI-Microservices/Infra/init/orders/init_orders.sql \
+  -n eci
+
+kubectl create configmap orders-csv \
+  --from-file=/home/yash/ECI-Microservices/Infra/init/orders/eci_orders.csv \
+  -n eci
+
+
+kubectl create configmap order-items-csv \
+  --from-file=/home/yash/ECI-Microservices/Infra/init/orders/eci_order_items.csv \
+  -n eci
+

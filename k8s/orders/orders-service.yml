@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  namespace: eci
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-service
+  template:
+    metadata:
+      labels:
+        app: orders-service
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8082"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      # Wait until the orders-db is fully ready before starting service
+      initContainers:
+        - name: wait-for-db
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z orders-db 3306; do echo "waiting for DB..."; sleep 5; done;']
+      
+      containers:
+        - name: orders-service
+          image: orders-service:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8082
+          env:
+            - name: DATABASE_URL
+              value: mysql://root:chima1234@orders-db:3306/ordersdb
+            - name: PORT
+              value: "8082"
+            - name: CATALOG_SERVICE_URL
+              value: "http://catalog-service:8080/v1"
+            - name: INVENTORY_SERVICE_URL
+              value: "http://inventory-service:8081"
+            - name: PAYMENT_SERVICE_URL
+              value: "http://payments-service:8083"
+
+          # Health checks for Node.js service
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8082
+            initialDelaySeconds: 200
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 5
+
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-service
+  namespace: eci
+  labels:
+    app: orders-service
+    monitoring: enabled
+spec:
+  type: NodePort
+  ports:
+    - port: 8082
+      targetPort: 8082
+      nodePort: 30082
+      name: http
+  selector:
+    app: orders-service
+

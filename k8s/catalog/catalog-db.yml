@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-db
+  namespace: eci
+  labels:
+    app: catalog-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: catalog-db
+  template:
+    metadata:
+      labels:
+        app: catalog-db
+    spec:
+      containers:
+        - name: catalog-db
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: root123
+            - name: MYSQL_DATABASE
+              value: catalogdb
+          volumeMounts:
+            # Persistent Volume for database files
+            - name: catalog-db-storage
+              mountPath: /var/lib/mysql
+
+            # Mount init SQL (auto-run during first startup)
+            - name: catalog-db-init
+              mountPath: /docker-entrypoint-initdb.d/init_catalog.sql
+              subPath: init_catalog.sql
+
+            # Mount CSV file (used by init_catalog.sql)
+            - name: catalog-csv
+              mountPath: /docker-entrypoint-initdb.d/eci_products.csv
+              subPath: eci_products.csv
+
+      volumes:
+        - name: catalog-db-storage
+          persistentVolumeClaim:
+            claimName: catalog-db-pvc
+
+        - name: catalog-db-init
+          configMap:
+            name: catalog-db-init
+
+        - name: catalog-csv
+          configMap:
+            name: catalog-csv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: catalog-db-pvc
+  namespace: eci
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalog-db
+  namespace: eci
+spec:
+  type: ClusterIP
+  selector:
+    app: catalog-db
+  ports:
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
+

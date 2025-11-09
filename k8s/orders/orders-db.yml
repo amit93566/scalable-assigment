@@ -1,0 +1,89 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-db
+  namespace: eci
+  labels:
+    app: orders-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-db
+  template:
+    metadata:
+      labels:
+        app: orders-db
+    spec:
+      containers:
+        - name: orders-db
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: chima1234
+            - name: MYSQL_DATABASE
+              value: ordersdb
+          volumeMounts:
+            - name: orders-db-storage
+              mountPath: /var/lib/mysql
+
+            # Mount init SQL
+            - name: orders-db-init
+              mountPath: /docker-entrypoint-initdb.d/init_orders.sql
+              subPath: init_orders.sql
+
+            # Mount CSV files
+            - name: orders-csv
+              mountPath: /docker-entrypoint-initdb.d/eci_orders.csv
+              subPath: eci_orders.csv
+
+            - name: order-items-csv
+              mountPath: /docker-entrypoint-initdb.d/eci_order_items.csv
+              subPath: eci_order_items.csv
+
+      volumes:
+        - name: orders-db-storage
+          persistentVolumeClaim:
+            claimName: orders-db-pvc
+
+        - name: orders-db-init
+          configMap:
+            name: orders-db-init
+
+        - name: orders-csv
+          configMap:
+            name: orders-csv
+
+        - name: order-items-csv
+          configMap:
+            name: order-items-csv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: orders-db-pvc
+  namespace: eci
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-db
+  namespace: eci
+spec:
+  type: ClusterIP
+  selector:
+    app: orders-db
+  ports:
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
+

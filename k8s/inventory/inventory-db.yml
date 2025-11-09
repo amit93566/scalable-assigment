@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inventory-db
+  namespace: eci
+  labels:
+    app: inventory-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inventory-db
+  template:
+    metadata:
+      labels:
+        app: inventory-db
+    spec:
+      containers:
+        - name: inventory-db
+          image: mysql:8.0
+          ports:
+            - containerPort: 3306
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: ipas
+            - name: MYSQL_DATABASE
+              value: inventorydb
+          volumeMounts:
+            # Persistent volume for database files
+            - name: inventory-db-storage
+              mountPath: /var/lib/mysql
+
+            # Mount SQL initialization script
+            - name: inventory-db-init
+              mountPath: /docker-entrypoint-initdb.d/init_inventory.sql
+              subPath: init_inventory.sql
+
+            # Mount CSV data
+            - name: inventory-csv
+              mountPath: /docker-entrypoint-initdb.d/eci_inventory.csv
+              subPath: eci_inventory.csv
+
+      volumes:
+        - name: inventory-db-storage
+          persistentVolumeClaim:
+            claimName: inventory-db-pvc
+
+        - name: inventory-db-init
+          configMap:
+            name: inventory-db-init
+
+        - name: inventory-csv
+          configMap:
+            name: inventory-csv
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: inventory-db-pvc
+  namespace: eci
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: inventory-db
+  namespace: eci
+spec:
+  type: ClusterIP
+  selector:
+    app: inventory-db
+  ports:
+    - port: 3306
+      targetPort: 3306
+      protocol: TCP
+
