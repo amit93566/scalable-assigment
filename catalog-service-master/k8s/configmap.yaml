@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: catalog-config
+data:
+  db.host: "mysql-service"
+  db.port: "3306"
+  db.name: "catalog_db"
