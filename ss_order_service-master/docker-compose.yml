@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  # ------------------------------------
+  # 1. MySQL Database Service
+  # ------------------------------------
+  order-db:
+    image: mysql:8.0
+    container_name: order-db
+    environment:
+      # Password must match the one in your .env
+      MYSQL_ROOT_PASSWORD: chima1234
+      MYSQL_DATABASE: order_db             
+    volumes:
+      - order_db_data:/var/lib/mysql
+    ports:
+      # Host Port 3307 -> Container Port 3306 (This is correct)
+      - "3307:3306"
+    healthcheck:
+      # CRITICAL FIX 1: Update healthcheck password to match the one set above
+      test: ["CMD", "mysqladmin" ,"ping", "-h", "localhost", "-u", "root", "-pchima1234"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - order-net
+
+  # ------------------------------------
+  # 2. Node.js Order Service
+  # ------------------------------------
+  order-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      # CRITICAL: Pass DATABASE_URL with service name 'order-db' for Prisma generate
+      args:
+        - DATABASE_URL=mysql://root:chima1234@order-db:3306/order_db
+    container_name: order-service
+    ports:
+      - "8080:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Database connection - MUST use service name 'order-db' for Docker networking
+      DATABASE_URL: mysql://root:chima1234@order-db:3306/order_db
+      # Service port
+      PORT: 8080
+      # External service URLs - use host.docker.internal to reach services on host machine
+      CATALOG_SERVICE_URL: http://172.17.0.1:8081/v1
+      INVENTORY_SERVICE_URL: http://172.17.0.1:8082
+      PAYMENT_SERVICE_URL: http://172.17.0.1:8083/
+    depends_on:
+      order-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - order-net
+    
+
+volumes:
+  order_db_data:
+
+networks:
+  order-net:
+    driver: bridge
