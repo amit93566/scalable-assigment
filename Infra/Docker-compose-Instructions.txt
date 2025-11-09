@@ -1,0 +1,10 @@
+To run docker compose,
+
+docker compose up -d --build
+
+
+to stop docker compose,
+
+docker compose down -v --rmi all
+
+

@@ -1,0 +1,57 @@
+version: "3.8"
+services:
+
+
+  # ---------- Payments ----------
+  payments-db:
+    image: postgres:15
+    container_name: payments-db
+    restart: always
+    environment:
+      POSTGRES_DB: paymentsdb
+      POSTGRES_USER: yash
+      POSTGRES_PASSWORD: yash123
+    ports:
+      - "5436:5432"
+    volumes:
+      - payments_data:/var/lib/postgresql/data
+      - ./init/payments:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yash -d paymentsdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - eci-net
+
+  payments-service:
+    build:
+      context: ../payments-service
+      dockerfile: Dockerfile
+    container_name: payments-service
+    depends_on:
+      payments-db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://payments-db:5432/paymentsdb
+      SPRING_DATASOURCE_USERNAME: yash
+      SPRING_DATASOURCE_PASSWORD: yash123
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SERVER_PORT: 8083
+    ports:
+      - "8083:8083"
+    restart: on-failure
+    volumes:
+      - ./init/payments:/app/init/payments
+    networks:
+      - eci-net
+
+networks:
+  eci-net:
+    driver: bridge
+
+volumes:
+  catalog_data:
+  inventory_data:
+  orders_data:
+  payments_data:
